@@ -197,7 +197,7 @@ abstract class UnixFileStore
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder(new String(entry.dir()));
+        StringBuilder sb = new StringBuilder(Util.toString(entry.dir()));
         sb.append(" (");
         sb.append(entry.name());
         sb.append(")");
