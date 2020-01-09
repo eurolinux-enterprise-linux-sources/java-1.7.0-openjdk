@@ -33,15 +33,20 @@
  * @key randomness
  */
 
+import java.security.AlgorithmParameters;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.Provider;
 import java.security.ProviderException;
 import java.security.Signature;
+import java.security.spec.ECGenParameterSpec;
 import java.security.spec.ECParameterSpec;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
+import java.util.Vector;
+
 import javax.crypto.KeyAgreement;
 
 public class TestCurves extends PKCS11Test {
@@ -125,6 +130,17 @@ public class TestCurves extends PKCS11Test {
         }
 
         System.out.println("OK");
+    }
+
+    private static ECParameterSpec getECParameterSpec(Provider p, String name)
+            throws Exception {
+
+        AlgorithmParameters parameters =
+            AlgorithmParameters.getInstance("EC", p);
+
+        parameters.init(new ECGenParameterSpec(name));
+
+        return parameters.getParameterSpec(ECParameterSpec.class);
     }
 
     private static void testSigning(Provider p, String algorithm,

@@ -119,6 +119,10 @@ define_pd_global(intx, InlineSmallCode,          1000);
           "Use Neon for CRC32 computation")                             \
   product(bool, UseCRC32, false,                                        \
           "Use CRC32 instructions for CRC32 computation")               \
+  product(bool, UseBlockZeroing, true,                                  \
+          "Use DC ZVA for block zeroing")                               \
+  product(intx, BlockZeroingLowLimit, 256,                              \
+          "Minimum size in bytes when block zeroing will be used")      \
   product(bool, TraceTraps, false, "Trace all traps the signal handler")
 
 #endif

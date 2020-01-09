@@ -1,7 +1,7 @@
 # If debug is 1, OpenJDK is built with all debug info present.
 %global debug 0
 
-%global icedtea_version 2.6.18
+%global icedtea_version 2.6.19
 %global icedtea_snapshot %{nil}
 %global hg_tag icedtea-%{icedtea_version}%{icedtea_snapshot}
 
@@ -159,8 +159,8 @@
 # Standard JPackage naming and versioning defines.
 %global origin          openjdk
 %global top_level_dir_name   %{origin}
-%global updatever       221
-%global buildver        02
+%global updatever       231
+%global buildver        01
 # Keep priority on 6digits in case updatever>9
 %global priority        170%{updatever}
 %global javaver         1.7.0
@@ -216,7 +216,7 @@
 
 Name:    java-%{javaver}-%{origin}
 Version: %{javaver}.%{updatever}
-Release: %{icedtea_version}%{icedtea_snapshot}.0%{?dist}
+Release: %{icedtea_version}%{icedtea_snapshot}.1%{?dist}
 # java-1.5.0-ibm from jpackage.org set Epoch to 1 for unknown reasons,
 # and this change was brought into RHEL-4.  java-1.5.0-ibm packages
 # also included the epoch in their virtual provides.  This created a
@@ -264,8 +264,8 @@ Source2:  README.src
 Source5: class-rewriter.tar.gz
 
 # Systemtap tapsets. Zipped up to keep it small.
-# last update from IcedTea 2.6.12
-Source6: systemtap-tapset-2.6.12.tar.xz
+# last update from IcedTea 2.6.19
+Source6: systemtap-tapset-2.6.19.tar.xz
 
 # .desktop files. 
 Source7:  policytool.desktop
@@ -599,7 +599,7 @@ tar xf %{SOURCE6}
 
 for file in tapset/*.in; do
 
-    OUTPUT_FILE=`echo $file | sed -e s:%{javaver}\.stp\.in$:%{version}-%{release}.stp:g`
+    OUTPUT_FILE=`echo $file | sed -e s:\.stp\.in$:-%{version}-%{release}.stp:g`
     sed -e s:@ABS_SERVER_LIBJVM_SO@:%{_jvmdir}/%{sdkdir}/jre/lib/%{archinstall}/server/libjvm.so:g $file > $file.1
 # FIXME this should really be %if %{has_client_jvm}
 %ifarch %{ix86}
@@ -1329,6 +1329,19 @@ exit 0
 %doc %{buildoutputdir}/j2sdk-image/jre/LICENSE
 
 %changelog
+* Tue Jul 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.231-2.6.19.1
+- Add missing hyphen in tapset filename.
+- Resolves: rhbz#1724452
+
+* Tue Jul 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.231-2.6.19.0
+- Update tapset name in patch.
+- Resolves: rhbz#1724452
+
+* Tue Jul 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.231-2.6.19.0
+- Bump to 2.6.19 (including tapsets) and OpenJDK 7u231-b01.
+- Fix fsg.sh to fail if patching fails.
+- Resolves: rhbz#1724452
+
 * Tue Apr 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.221-2.6.18.0
 - Bump to 2.6.18 and OpenJDK 7u221-b02.
 - Resolves: rhbz#1693468

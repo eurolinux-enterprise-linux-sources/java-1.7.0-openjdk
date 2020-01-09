@@ -1607,7 +1607,7 @@ const bool Matcher::misaligned_vectors_ok() {
 const bool Matcher::init_array_count_is_in_bytes = false;
 
 // Threshold size for cleararray.
-const int Matcher::init_array_short_size = 18 * BytesPerLong;
+const int Matcher::init_array_short_size = 4 * BytesPerLong;
 
 // Use conditional move (CMOVL)
 const int Matcher::long_cmove_cost() {
@@ -2479,55 +2479,6 @@ encode %{
     }
   %}
 
-  enc_class aarch64_enc_clear_array_reg_reg(iRegL_R11 cnt, iRegP_R10 base) %{
-    MacroAssembler _masm(&cbuf);
-    Register cnt_reg = as_Register($cnt$$reg);
-    Register base_reg = as_Register($base$$reg);
-    // base is word aligned
-    // cnt is count of words
-
-    Label loop;
-    Label entry;
-
-//  Algorithm:
-//
-//    scratch1 = cnt & 7;
-//    cnt -= scratch1;
-//    p += scratch1;
-//    switch (scratch1) {
-//      do {
-//        cnt -= 8;
-//          p[-8] = 0;
-//        case 7:
-//          p[-7] = 0;
-//        case 6:
-//          p[-6] = 0;
-//          // ...
-//        case 1:
-//          p[-1] = 0;
-//        case 0:
-//          p += 8;
-//      } while (cnt);
-//    }
-
-    const int unroll = 8; // Number of str(zr) instructions we'll unroll
-
-    __ andr(rscratch1, cnt_reg, unroll - 1);  // tmp1 = cnt % unroll
-    __ sub(cnt_reg, cnt_reg, rscratch1);      // cnt -= unroll
-    // base_reg always points to the end of the region we're about to zero
-    __ add(base_reg, base_reg, rscratch1, Assembler::LSL, exact_log2(wordSize));
-    __ adr(rscratch2, entry);
-    __ sub(rscratch2, rscratch2, rscratch1, Assembler::LSL, 2);
-    __ br(rscratch2);
-    __ bind(loop);
-    __ sub(cnt_reg, cnt_reg, unroll);
-    for (int i = -unroll; i < 0; i++)
-      __ str(zr, Address(base_reg, i * wordSize));
-    __ bind(entry);
-    __ add(base_reg, base_reg, unroll * wordSize);
-    __ cbnz(cnt_reg, loop);
-  %}
-
   /// mov envcodings
 
   enc_class aarch64_enc_movw_imm(iRegI dst, immI src) %{
@@ -2954,6 +2905,8 @@ encode %{
     // membar_acquire_lock().
     {
       Label retry_load;
+      if ((VM_Version::cpu_cpuFeatures() & VM_Version::CPU_STXR_PREFETCH))
+        __ prfm(Address(oop), PSTL1STRM);
       __ bind(retry_load);
       __ ldxr(tmp, oop);
       __ cmp(tmp, disp_hdr);
@@ -3004,6 +2957,8 @@ encode %{
 
       {
 	Label retry_load, fail;
+        if ((VM_Version::cpu_cpuFeatures() & VM_Version::CPU_STXR_PREFETCH))
+          __ prfm(Address(tmp), PSTL1STRM);
 	__ bind(retry_load);
 	__ ldxr(rscratch1, tmp);
 	__ cmp(disp_hdr, rscratch1);
@@ -3093,6 +3048,8 @@ encode %{
 
       {
 	Label retry_load;
+        if ((VM_Version::cpu_cpuFeatures() & VM_Version::CPU_STXR_PREFETCH))
+          __ prfm(Address(oop), PSTL1STRM);
 	__ bind(retry_load);
 	__ ldxr(tmp, oop);
 	__ cmp(box, tmp);
@@ -10405,7 +10362,9 @@ instruct clearArray_reg_reg(iRegL_R11 cnt, iRegP_R10 base, Universe dummy, rFlag
   ins_cost(4 * INSN_COST);
   format %{ "ClearArray $cnt, $base" %}
 
-  ins_encode(aarch64_enc_clear_array_reg_reg(cnt, base));
+  ins_encode %{
+    __ zero_words($base$$Register, $cnt$$Register);
+  %}
 
   ins_pipe(pipe_class_memory);
 %}
@@ -11440,9 +11399,10 @@ instruct cmpFastUnlock(rFlagsReg cr, iRegP object, iRegP box, iRegPNoSp tmp, iRe
 // TODO
 // provide a near and far version of this code
 
-instruct safePoint(iRegP poll)
+instruct safePoint(rFlagsReg cr, iRegP poll)
 %{
   match(SafePoint poll);
+  effect(KILL cr);
 
   format %{
     "ldrw zr, [$poll]\t# Safepoint: poll for GC"
@@ -11773,6 +11733,21 @@ instruct array_equals(iRegP_R1 ary1, iRegP_R2 ary2, iRegI_R0 result,
     __ char_arrays_equals($ary1$$Register, $ary2$$Register,
                           $result$$Register, $tmp$$Register);
   %}
+  ins_pipe(pipe_class_memory);
+%}
+
+instruct clearArray_imm_reg(immL cnt, iRegP_R10 base, iRegL_R11 tmp, Universe dummy, rFlagsReg cr)
+%{
+  match(Set dummy (ClearArray cnt base));
+  effect(USE_KILL base, TEMP tmp);
+
+  ins_cost(4 * INSN_COST);
+  format %{ "ClearArray $cnt, $base" %}
+
+  ins_encode %{
+    __ zero_words($base$$Register, (u_int64_t)$cnt$$constant);
+  %}
+
   ins_pipe(pipe_class_memory);
 %}
 

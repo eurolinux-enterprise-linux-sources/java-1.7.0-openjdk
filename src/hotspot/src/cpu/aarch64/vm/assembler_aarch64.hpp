@@ -1034,12 +1034,28 @@ public:
     system(0b00, 0b011, 0b00011, SY, 0b110);
   }
 
-  void dc(Register Rt) {
-    system(0b01, 0b011, 0b0111, 0b1011, 0b001, Rt);
+  void sys(int op1, int CRn, int CRm, int op2,
+           Register rt = (Register)0b11111) {
+    system(0b01, op1, CRn, CRm, op2, rt);
   }
 
-  void ic(Register Rt) {
-    system(0b01, 0b011, 0b0111, 0b0101, 0b001, Rt);
+  // Only implement operations accessible from EL0 or higher, i.e.,
+  //            op1    CRn    CRm    op2
+  // IC IVAU     3      7      5      1
+  // DC CVAC     3      7      10     1
+  // DC CVAU     3      7      11     1
+  // DC CIVAC    3      7      14     1
+  // DC ZVA      3      7      4      1
+  // So only deal with the CRm field.
+  enum icache_maintenance {IVAU = 0b0101};
+  enum dcache_maintenance {CVAC = 0b1010, CVAU = 0b1011, CIVAC = 0b1110, ZVA = 0b100};
+
+  void dc(dcache_maintenance cm, Register Rt) {
+    sys(0b011, 0b0111, cm, 0b001, Rt);
+  }
+
+  void ic(icache_maintenance cm, Register Rt) {
+    sys(0b011, 0b0111, cm, 0b001, Rt);
   }
 
   // A more convenient access to dmb for our purposes
@@ -2661,10 +2677,11 @@ class MacroAssembler: public Assembler {
     umaddl(Rd, Rn, Rm, zr);
   }
 
-#define WRAP(INSN)                                                \
-  void INSN(Register Rd, Register Rn, Register Rm, Register Ra) { \
-    if (Ra != zr) nop();                                          \
-    Assembler::INSN(Rd, Rn, Rm, Ra);                              \
+#define WRAP(INSN)                                                            \
+  void INSN(Register Rd, Register Rn, Register Rm, Register Ra) {             \
+    if ((VM_Version::cpu_cpuFeatures() & VM_Version::CPU_A53MAC) && Ra != zr) \
+      nop();                                                                  \
+    Assembler::INSN(Rd, Rn, Rm, Ra);                                          \
   }
 
   WRAP(madd) WRAP(msub) WRAP(maddw) WRAP(msubw)
@@ -2772,6 +2789,24 @@ public:
   inline void clear_fpsr()
   {
     msr(0b011, 0b0100, 0b0100, 0b001, zr);
+  }
+
+  // DCZID_EL0: op1 == 011
+  //            CRn == 0000
+  //            CRm == 0000
+  //            op2 == 111
+  inline void get_dczid_el0(Register reg)
+  {
+    mrs(0b011, 0b0000, 0b0000, 0b111, reg);
+  }
+
+  // CTR_EL0:   op1 == 011
+  //            CRn == 0000
+  //            CRm == 0000
+  //            op2 == 001
+  inline void get_ctr_el0(Register reg)
+  {
+    mrs(0b011, 0b0000, 0b0000, 0b001, reg);
   }
 
   // idiv variant which deals with MINLONG as dividend and -1 as divisor
@@ -3581,6 +3616,11 @@ public:
                      Register tmp1);
   void char_arrays_equals(Register ary1, Register ary2,
                           Register result, Register tmp1);
+  void fill_words(Register base, Register cnt, Register value);
+  void zero_words(Register base, u_int64_t cnt);
+  void zero_words(Register base, Register cnt);
+  void block_zero(Register base, Register cnt, bool is_large = false);
+
   // ISB may be needed because of a safepoint
   void maybe_isb() { isb(); }
 };

@@ -1512,6 +1512,8 @@ void LIR_Assembler::casw(Register addr, Register newval, Register cmpval) {
   Label retry_load, nope;
   // flush and load exclusive from the memory location
   // and fail if it is not what we expect
+  if ((VM_Version::cpu_cpuFeatures() & VM_Version::CPU_STXR_PREFETCH))
+    __ prfm(Address(addr), PSTL1STRM);
   __ bind(retry_load);
   __ ldaxrw(rscratch1, addr);
   __ cmpw(rscratch1, cmpval);
@@ -1530,6 +1532,8 @@ void LIR_Assembler::casl(Register addr, Register newval, Register cmpval) {
   Label retry_load, nope;
   // flush and load exclusive from the memory location
   // and fail if it is not what we expect
+  if ((VM_Version::cpu_cpuFeatures() & VM_Version::CPU_STXR_PREFETCH))
+    __ prfm(Address(addr), PSTL1STRM);
   __ bind(retry_load);
   __ ldaxr(rscratch1, addr);
   __ cmp(rscratch1, cmpval);
@@ -2189,7 +2193,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
 
     if (copyfunc_addr != NULL) {
       // r0 is -1^K where K == partial copied count
-      __ eonw(rscratch1, r0, 0);
+      __ eonw(rscratch1, r0, zr);
       // adjust length down and src/end pos up by partial copied count
       __ subw(length, length, rscratch1);
       __ addw(src_pos, src_pos, rscratch1);
