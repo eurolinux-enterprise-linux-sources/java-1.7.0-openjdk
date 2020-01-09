@@ -1,0 +1,20 @@
+--- ./tapset/jstack-1.7.0.stp.in	2012-03-19 15:29:23.648803076 +0100
++++ ./tapset/jstack-1.7.0.stp.in	2012-03-19 15:29:29.364886047 +0100
+@@ -320,7 +320,7 @@
+               if (used != 1)
+                 {
+                   // Something very odd has happened.
+-                  frame = sprintf("<unused_code_block@0x%x>", pc);
++                  frame = "<unused_code_block>";
+                   blob_name = "unused";
+                   trust_fp = 0;
+                   frame_size = 0;
+@@ -444,7 +444,7 @@
+             {
+               // Some assumption above totally failed and we got an address
+               // read error. Give up and mark frame pointer as suspect.
+-              frame = sprintf("<unknown_frame@0x%x>", pc);
++              frame = "<unknown_frame>";
+               trust_fp = 0;
+             }
+         }
