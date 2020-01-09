@@ -216,7 +216,7 @@
 
 Name:    java-%{javaver}-%{origin}
 Version: %{javaver}.%{updatever}
-Release: %{icedtea_version}%{icedtea_snapshot}.1%{?dist}
+Release: %{icedtea_version}%{icedtea_snapshot}.2%{?dist}
 # java-1.5.0-ibm from jpackage.org set Epoch to 1 for unknown reasons,
 # and this change was brought into RHEL-4.  java-1.5.0-ibm packages
 # also included the epoch in their virtual provides.  This created a
@@ -343,6 +343,8 @@ Patch303: rh1648665-jstack_sprintf_prints_constant.patch
 
 # 8076221, PR2809: Backport "8076221: Disable RC4 cipher suites" (will appear in 2.7.0)
 Patch500: jdk8076221-pr2809-disable_rc4_cipher_suites.patch
+# JDK-8226318, RH1738637: Fix crash in Class.forName (will appear in 7u241/2.6.20)
+Patch502: jdk8226318-rh1738637-class_lookup_crash.patch
 # End of tmp patches
 
 BuildRequires: autoconf
@@ -576,6 +578,7 @@ cp -v %{SOURCE15} %{SOURCE16} openjdk/jdk/src/share/native/sun/security/ec
 
 # Temporary fixes
 %patch500
+%patch502
 # End of temporary fixes
 
 # ECC fix
@@ -1329,6 +1332,10 @@ exit 0
 %doc %{buildoutputdir}/j2sdk-image/jre/LICENSE
 
 %changelog
+* Fri Aug 23 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.231-2.6.19.2
+- Fix crash in Class.forName0
+- Resolves: rhbz#1698274
+
 * Tue Jul 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.231-2.6.19.1
 - Add missing hyphen in tapset filename.
 - Resolves: rhbz#1724452
