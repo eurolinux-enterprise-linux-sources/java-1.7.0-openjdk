@@ -1,7 +1,7 @@
 # If debug is 1, OpenJDK is built with all debug info present.
 %global debug 0
 
-%global icedtea_version 2.6.17
+%global icedtea_version 2.6.18
 %global icedtea_snapshot %{nil}
 %global hg_tag icedtea-%{icedtea_version}%{icedtea_snapshot}
 
@@ -159,7 +159,7 @@
 # Standard JPackage naming and versioning defines.
 %global origin          openjdk
 %global top_level_dir_name   %{origin}
-%global updatever       211
+%global updatever       221
 %global buildver        02
 # Keep priority on 6digits in case updatever>9
 %global priority        170%{updatever}
@@ -216,7 +216,7 @@
 
 Name:    java-%{javaver}-%{origin}
 Version: %{javaver}.%{updatever}
-Release: %{icedtea_version}%{icedtea_snapshot}.1%{?dist}
+Release: %{icedtea_version}%{icedtea_snapshot}.0%{?dist}
 # java-1.5.0-ibm from jpackage.org set Epoch to 1 for unknown reasons,
 # and this change was brought into RHEL-4.  java-1.5.0-ibm packages
 # also included the epoch in their virtual provides.  This created a
@@ -1329,6 +1329,10 @@ exit 0
 %doc %{buildoutputdir}/j2sdk-image/jre/LICENSE
 
 %changelog
+* Tue Apr 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.221-2.6.18.0
+- Bump to 2.6.18 and OpenJDK 7u221-b02.
+- Resolves: rhbz#1693468
+
 * Wed Feb 27 2019 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.7.0.211-2.6.17.1
 - Produce debug symbols for libpulse-java.so
 - Set IT_CFLAGS=-g so that debug symbols for the pulse audio

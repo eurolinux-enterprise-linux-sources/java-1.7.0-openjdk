@@ -672,7 +672,7 @@ export ARM32JIT=false
 
 # IcedTea versioning
 export ICEDTEA_NAME="IcedTea"
-export PACKAGE_VERSION="2.6.17"
+export PACKAGE_VERSION="2.6.18"
 export DERIVATIVE_ID="${ICEDTEA_NAME} ${PACKAGE_VERSION}"
 echo "Building ${DERIVATIVE_ID}"
 
