@@ -1,3 +1,8 @@
+# The -g flag says to use strip -g instead of full strip on DSOs or EXEs.
+# This fixes detailed NMT and other tools which need minimal debug info.
+# See: https://bugzilla.redhat.com/show_bug.cgi?id=1520879
+%global _find_debuginfo_opts -g
+
 # If debug is 1, OpenJDK is built with all debug info present.
 %global debug 0
 
@@ -35,7 +40,7 @@
 # as to why some libraries *cannot* be excluded. In particular,
 # these are:
 # libjsig.so, libjava.so, libjawt.so, libjvm.so and libverify.so
-%global _privatelibs libatk-wrapper[.]so.*|libattach[.]so.*|libawt_headless[.]so.*|libawt[.]so.*|libawt_xawt[.]so.*|libdt_socket[.]so.*|libfontmanager[.]so.*|libhprof[.]so.*|libinstrument[.]so.*|libj2gss[.]so.*|libj2pcsc[.]so.*|libj2pkcs11[.]so.*|libjaas_unix[.]so.*|libjava_crw_demo[.]so.*|libjavajpeg[.]so.*|libjdwp[.]so.*|libjli[.]so.*|libjsdt[.]so.*|libjsoundalsa[.]so.*|libjsound[.]so.*|liblcms[.]so.*|libmanagement[.]so.*|libmlib_image[.]so.*|libnet[.]so.*|libnio[.]so.*|libnpt[.]so.*|libsaproc[.]so.*|libsctp[.]so.*|libsplashscreen[.]so.*|libsunec[.]so.*|libunpack[.]so.*|libzip[.]so.*|lib[.]so\\(SUNWprivate_.*
+%global _privatelibs libatk-wrapper[.]so.*|libattach[.]so.*|libawt_headless[.]so.*|libawt[.]so.*|libawt_xawt[.]so.*|libdt_socket[.]so.*|libfontmanager[.]so.*|libhprof[.]so.*|libinstrument[.]so.*|libj2gss[.]so.*|libj2pcsc[.]so.*|libj2pkcs11[.]so.*|libjaas_unix[.]so.*|libjava_crw_demo[.]so.*|libjavajpeg[.]so.*|libjdwp[.]so.*|libjli[.]so.*|libjsdt[.]so.*|libjsoundalsa[.]so.*|libjsound[.]so.*|libmawt[.]so.*|libmanagement[.]so.*|libmlib_image[.]so.*|libnet[.]so.*|libnio[.]so.*|libnpt[.]so.*|libsaproc[.]so.*|libjavasctp[.]so.*|libjavalcms[.]so.*|libjavagtk[.]so.*|libsplashscreen[.]so.*|libsunec[.]so.*|libunpack[.]so.*|libzip[.]so.*|lib[.]so\\(SUNWprivate_.*
 
 %global __provides_exclude ^(%{_privatelibs})$
 %global __requires_exclude ^(%{_privatelibs})$
@@ -206,7 +211,7 @@
 
 Name:    java-%{javaver}-%{origin}
 Version: %{javaver}.%{updatever}
-Release: %{icedtea_version}%{icedtea_snapshot}.1%{?dist}
+Release: %{icedtea_version}%{icedtea_snapshot}.2%{?dist}
 # java-1.5.0-ibm from jpackage.org set Epoch to 1 for unknown reasons,
 # and this change was brought into RHEL-4.  java-1.5.0-ibm packages
 # also included the epoch in their virtual provides.  This created a
@@ -353,7 +358,6 @@ BuildRequires: libXinerama-devel
 BuildRequires: redhat-lsb-core
 BuildRequires: rhino
 BuildRequires: zip
-BuildRequires: fontconfig
 BuildRequires: xorg-x11-fonts-Type1
 BuildRequires: zlib > 1.2.3-6
 # Require a build JDK which has a working jar uf (PR1437 / RH1207129)
@@ -396,7 +400,6 @@ BuildRequires: prelink
 BuildRequires: systemtap-sdt-devel
 %endif
 
-Requires: fontconfig
 Requires: xorg-x11-fonts-Type1
 #requires rest of java
 Requires: %{name}-headless = %{epoch}:%{version}-%{release}
@@ -428,18 +431,15 @@ The OpenJDK runtime environment.
 Summary: The OpenJDK runtime environment without audio and video support
 Group:   Development/Languages
 
-# LCMS 2 is disabled until security issues are resolved
-#Requires: lcms2 >= 2.5
-Requires: libjpeg = 6b
 # Require /etc/pki/java/cacerts.
 Requires: ca-certificates
 # Require jpackage-utils for ant.
 Requires: jpackage-utils >= 1.7.3-1jpp.2
 # Require zoneinfo data provided by tzdata-java subpackage.
 Requires: tzdata-java
-# there is need to depnd on exact version of nss
-Requires: nss %{NSS_BUILDTIME_VERSION}
-Requires: nss-softokn %{NSSSOFTOKN_BUILDTIME_VERSION}
+# there is a need to depend on the exact version of NSS
+Requires: nss%{?_isa} %{NSS_BUILDTIME_VERSION}
+Requires: nss-softokn%{?_isa} %{NSSSOFTOKN_BUILDTIME_VERSION}
 # tool to copy jdk's configs - should be Recommends only, but then only dnf/yum eforce it, not rpm transaction and so no configs are persisted when pure rpm -u is run. I t may be consiedered as regression
 Requires:	copy-jdk-configs >= 3.3-9
 OrderWithRequires: copy-jdk-configs
@@ -1376,7 +1376,10 @@ exit 0
 
 
 %files -f %{name}.files
+%defattr(-,root,root,-)
 %{_datadir}/icons/hicolor/*x*/apps/java-%{javaver}.png
+%{_datadir}/applications/*policytool.desktop
+%{_mandir}/man1/policytool-%{uniquesuffix}.1*
 
 # important note, see https://bugzilla.redhat.com/show_bug.cgi?id=1038092 for whole issue 
 # all config/norepalce files (and more) have to be declared in pretrans. See pretrans
@@ -1450,7 +1453,6 @@ exit 0
 %endif
 %{_jvmjardir}/%{sdkdir}
 %{_datadir}/applications/*jconsole.desktop
-%{_datadir}/applications/*policytool.desktop
 %{_mandir}/man1/appletviewer-%{uniquesuffix}.1*
 %{_mandir}/man1/apt-%{uniquesuffix}.1*
 %{_mandir}/man1/extcheck-%{uniquesuffix}.1*
@@ -1474,7 +1476,6 @@ exit 0
 %{_mandir}/man1/jstat-%{uniquesuffix}.1*
 %{_mandir}/man1/jstatd-%{uniquesuffix}.1*
 %{_mandir}/man1/native2ascii-%{uniquesuffix}.1*
-%{_mandir}/man1/policytool-%{uniquesuffix}.1*
 %{_mandir}/man1/rmic-%{uniquesuffix}.1*
 %{_mandir}/man1/schemagen-%{uniquesuffix}.1*
 %{_mandir}/man1/serialver-%{uniquesuffix}.1*
@@ -1505,31 +1506,34 @@ exit 0
 %{_jvmdir}/%{jredir}/lib/accessibility.properties
 
 %changelog
-* Tue Jul 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.231-2.6.19.1
+* Tue Jul 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.231-2.6.19.2
 - Add missing hyphen in tapset filename.
 - Resolves: rhbz#1724452
 
-* Tue Jul 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.231-2.6.19.0
+* Tue Jul 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.231-2.6.19.1
 - Update tapset filename matching pattern.
 - Resolves: rhbz#1724452
 
-* Tue Jul 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.231-2.6.19.0
+* Tue Jul 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.231-2.6.19.1
 - Bump to 2.6.19 (including tapsets) and OpenJDK 7u231-b01.
 - Fix fsg.sh to fail if patching fails.
 - Resolves: rhbz#1724452
 
-* Tue Apr 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.221-2.6.18.0
+* Tue Apr 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.221-2.6.18.1
 - Bump to 2.6.18 and OpenJDK 7u221-b02.
 - Resolves: rhbz#1693468
 
-* Wed Feb 27 2019 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.7.0.211-2.6.17.1
-- Produce debug symbols for libpulse-java.so
-- Set IT_CFLAGS=-g so that debug symbols for the pulse audio
-- native library are being produced. This is needed to fix
-- rpmdiff errors of missing .debug_info in pulse-java.so.debug.
-- Resolves: rhbz#1661577
+* Fri Mar 29 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.211-2.6.17.2
+- Synchronise Requires with java-1.8.0-openjdk
+- Replace liblcms.so and libsctp.so in _privatelibs with libjavalcms.so and libjavasctp.so
+- Add libjavagtk.so and libmawt.so to _privatelibs
+- Remove duplicate fontconfig build requirement
+- Remove unneeded Requires for fontconfig, lcms2 and libjpeg (all dynamically linked against)
+- Add _isa to NSS requirements
+- Move policytool desktop file and man page to java-1.7.0-openjdk where the binary is
+- Resolves: rhbz#1608957
 
-* Mon Feb 25 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.211-2.6.17.0
+* Mon Feb 25 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.211-2.6.17.1
 - Bump to 2.6.17.
 - Adjust jdk8076221-pr2809-disable_rc4_cipher_suites.patch to apply after 8211883
 - Regenerate pr3393-rh1273760-support_rsaandmgf1_with_sha_in_pkcs11.patch against current sources
@@ -1539,6 +1543,14 @@ exit 0
 - Bump to 2.6.17pre01.
 - Add support for icedtea_snapshot so we can build pre-releases.
 - Resolves: rhbz#1661577
+
+* Fri Dec 07 2018 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.7.0.201-2.6.16.4
+- Added %%global _find_debuginfo_opts -g
+- Resolves: rhbz#1010786
+
+* Wed Nov 07 2018 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.201-2.6.16.2
+- Bump release so y-stream takes priority over z-stream.
+- Resolves: rhbz#1633817
 
 * Mon Oct 22 2018 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.201-2.6.16.1
 - Bump to 2.6.16 and u201b00.
