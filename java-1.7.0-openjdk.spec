@@ -10,7 +10,7 @@
 # conflicting) files in the -debuginfo package
 %undefine _missing_build_ids_terminate_build
 
-%global icedtea_version 2.6.19
+%global icedtea_version 2.6.20
 %global icedtea_snapshot %{nil}
 %global hg_tag icedtea-%{icedtea_version}%{icedtea_snapshot}
 
@@ -165,7 +165,7 @@
 # Standard JPackage naming and versioning defines.
 %global origin          openjdk
 %global top_level_dir_name   %{origin}
-%global updatever       231
+%global updatever       241
 %global buildver        01
 # Keep priority on 7digits in case updatever>9
 %global priority        1700%{updatever}
@@ -211,7 +211,7 @@
 
 Name:    java-%{javaver}-%{origin}
 Version: %{javaver}.%{updatever}
-Release: %{icedtea_version}%{icedtea_snapshot}.2%{?dist}
+Release: %{icedtea_version}%{icedtea_snapshot}.0%{?dist}
 # java-1.5.0-ibm from jpackage.org set Epoch to 1 for unknown reasons,
 # and this change was brought into RHEL-4.  java-1.5.0-ibm packages
 # also included the epoch in their virtual provides.  This created a
@@ -322,9 +322,6 @@ Patch200: rh1648241-abrt_friendly_hs_log_jdk7.patch
 # Make the ALSA based mixer the default when building with the pulseaudio based
 # mixer
 Patch300: rh1649760-make_alsa_based_mixer_default_when_pulseaudio_build.patch
-
-# Make the curves reported by Java's SSL implementation match those of NSS
-Patch400: pr1834-rh1022017-reduce_ellipticcurvesextension_to_provide_only_three_nss_supported_nist_curves_23_24_25.patch
 
 # Temporary patches
 
@@ -578,9 +575,6 @@ cp %{SOURCE2} .
 %patch500
 %patch501
 # End of temporary fixes
-
-# ECC fix
-%patch400
 
 # Add systemtap patches if enabled
 %if %{with_systemtap}
@@ -1506,6 +1500,11 @@ exit 0
 %{_jvmdir}/%{jredir}/lib/accessibility.properties
 
 %changelog
+* Tue Oct 15 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.241-2.6.20.0
+- Bump to 2.6.20 and OpenJDK 7u241-b01.
+- Drop PR1834/RH1022017 which is now handled by JDK-8228825 upstream.
+- Resolves: rhbz#1753423
+
 * Tue Jul 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.7.0.231-2.6.19.2
 - Add missing hyphen in tapset filename.
 - Resolves: rhbz#1724452
