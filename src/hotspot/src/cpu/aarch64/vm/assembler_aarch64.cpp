@@ -3146,6 +3146,8 @@ Address MacroAssembler::form_address(Register Rd, Register base, long byte_offse
 
 void MacroAssembler::atomic_incw(Register counter_addr, Register tmp, Register tmp2) {
   Label retry_load;
+  if ((VM_Version::cpu_cpuFeatures() & VM_Version::CPU_STXR_PREFETCH))
+    prfm(Address(counter_addr), PSTL1STRM);
   bind(retry_load);
   // flush and load exclusive from the memory location
   ldxrw(tmp, counter_addr);
@@ -3571,7 +3573,8 @@ void MacroAssembler::cmpxchgptr(Register oldv, Register newv, Register addr, Reg
   // addr identifies memory word to compare against/update
   // tmp returns 0/1 for success/failure
   Label retry_load, nope;
-
+  if ((VM_Version::cpu_cpuFeatures() & VM_Version::CPU_STXR_PREFETCH))
+    prfm(Address(addr), PSTL1STRM);
   bind(retry_load);
   // flush and load exclusive from the memory location
   // and fail if it is not what we expect
@@ -3599,7 +3602,8 @@ void MacroAssembler::cmpxchgw(Register oldv, Register newv, Register addr, Regis
   // addr identifies memory word to compare against/update
   // tmp returns 0/1 for success/failure
   Label retry_load, nope;
-
+  if ((VM_Version::cpu_cpuFeatures() & VM_Version::CPU_STXR_PREFETCH))
+    prfm(Address(addr), PSTL1STRM);
   bind(retry_load);
   // flush and load exclusive from the memory location
   // and fail if it is not what we expect
@@ -3634,6 +3638,8 @@ void MacroAssembler::atomic_##OP(Register prev, RegisterOrConstant incr, Registe
     result = different(prev, incr, addr) ? prev : rscratch2;            \
                                                                         \
   Label retry_load;                                                     \
+  if ((VM_Version::cpu_cpuFeatures() & VM_Version::CPU_STXR_PREFETCH))         \
+    prfm(Address(addr), PSTL1STRM);                                     \
   bind(retry_load);                                                     \
   LDXR(result, addr);                                                   \
   OP(rscratch1, result, incr);                                          \
@@ -3656,6 +3662,8 @@ void MacroAssembler::atomic_##OP(Register prev, Register newv, Register addr) { 
     result = different(prev, newv, addr) ? prev : rscratch2;            \
                                                                         \
   Label retry_load;                                                     \
+  if ((VM_Version::cpu_cpuFeatures() & VM_Version::CPU_STXR_PREFETCH))         \
+    prfm(Address(addr), PSTL1STRM);                                     \
   bind(retry_load);                                                     \
   LDXR(result, addr);                                                   \
   STXR(rscratch1, newv, addr);                                          \
@@ -4444,6 +4452,12 @@ void MacroAssembler::store_heap_oop_null(Address dst) {
 }
 
 #ifndef SERIALGC
+/*
+ * g1_write_barrier_pre -- G1GC pre-write barrier for store of new_val at
+ * store_addr.
+ *
+ * Allocates rscratch1
+ */
 void MacroAssembler::g1_write_barrier_pre(Register obj,
                                           Register pre_val,
                                           Register thread,
@@ -4461,10 +4475,8 @@ void MacroAssembler::g1_write_barrier_pre(Register obj,
   Label done;
   Label runtime;
 
-  assert(pre_val != noreg, "check this code");
-
-  if (obj != noreg)
-    assert_different_registers(obj, pre_val, tmp);
+  assert_different_registers(obj, pre_val, tmp, rscratch1);
+  assert(pre_val != noreg &&  tmp != noreg, "expecting a register");
 
   Address in_progress(thread, in_bytes(JavaThread::satb_mark_queue_offset() +
                                        PtrQueue::byte_offset_of_active()));
@@ -4538,6 +4550,12 @@ void MacroAssembler::g1_write_barrier_pre(Register obj,
   bind(done);
 }
 
+/*
+ * g1_write_barrier_post -- G1GC post-write barrier for store of new_val at
+ * store_addr
+ *
+ * Allocates rscratch1
+ */
 void MacroAssembler::g1_write_barrier_post(Register store_addr,
                                            Register new_val,
                                            Register thread,
@@ -4546,6 +4564,10 @@ void MacroAssembler::g1_write_barrier_post(Register store_addr,
 #ifdef _LP64
   assert(thread == rthread, "must be");
 #endif // _LP64
+  assert_different_registers(store_addr, new_val, thread, tmp, tmp2,
+                             rscratch1);
+  assert(store_addr != noreg && new_val != noreg && tmp != noreg
+         && tmp2 != noreg, "expecting a register");
 
   Address queue_index(thread, in_bytes(JavaThread::dirty_card_queue_offset() +
                                        PtrQueue::byte_offset_of_index()));
@@ -5428,6 +5450,177 @@ void MacroAssembler::string_compare(Register str1, Register str2,
   BLOCK_COMMENT("} string_compare");
 }
 
+
+// base:     Address of a buffer to be zeroed, 8 bytes aligned.
+// cnt:      Count in HeapWords.
+// is_large: True when 'cnt' is known to be >= BlockZeroingLowLimit.
+void MacroAssembler::zero_words(Register base, Register cnt)
+{
+  if (UseBlockZeroing) {
+    block_zero(base, cnt);
+  } else {
+    fill_words(base, cnt, zr);
+  }
+}
+
+// r10 = base:   Address of a buffer to be zeroed, 8 bytes aligned.
+// cnt:          Immediate count in HeapWords.
+// r11 = tmp:    For use as cnt if we need to call out
+#define ShortArraySize (18 * BytesPerLong)
+void MacroAssembler::zero_words(Register base, u_int64_t cnt)
+{
+  Register tmp = r11;
+  int i = cnt & 1;  // store any odd word to start
+  if (i) str(zr, Address(base));
+
+  if (cnt <= ShortArraySize / BytesPerLong) {
+    for (; i < (int)cnt; i += 2)
+      stp(zr, zr, Address(base, i * wordSize));
+  } else if (UseBlockZeroing && cnt >= (u_int64_t)(BlockZeroingLowLimit >> LogBytesPerWord)) {
+    mov(tmp, cnt);
+    block_zero(base, tmp, true);
+  } else {
+    const int unroll = 4; // Number of stp(zr, zr) instructions we'll unroll
+    int remainder = cnt % (2 * unroll);
+    for (; i < remainder; i += 2)
+      stp(zr, zr, Address(base, i * wordSize));
+
+    Label loop;
+    Register cnt_reg = rscratch1;
+    Register loop_base = rscratch2;
+    cnt = cnt - remainder;
+    mov(cnt_reg, cnt);
+    // adjust base and prebias by -2 * wordSize so we can pre-increment
+    add(loop_base, base, (remainder - 2) * wordSize);
+    bind(loop);
+    sub(cnt_reg, cnt_reg, 2 * unroll);
+    for (i = 1; i < unroll; i++)
+      stp(zr, zr, Address(loop_base, 2 * i * wordSize));
+    stp(zr, zr, Address(pre(loop_base, 2 * unroll * wordSize)));
+    cbnz(cnt_reg, loop);
+  }
+}
+
+// base:   Address of a buffer to be filled, 8 bytes aligned.
+// cnt:    Count in 8-byte unit.
+// value:  Value to be filled with.
+// base will point to the end of the buffer after filling.
+void MacroAssembler::fill_words(Register base, Register cnt, Register value)
+{
+//  Algorithm:
+//
+//    scratch1 = cnt & 7;
+//    cnt -= scratch1;
+//    p += scratch1;
+//    switch (scratch1) {
+//      do {
+//        cnt -= 8;
+//          p[-8] = v;
+//        case 7:
+//          p[-7] = v;
+//        case 6:
+//          p[-6] = v;
+//          // ...
+//        case 1:
+//          p[-1] = v;
+//        case 0:
+//          p += 8;
+//      } while (cnt);
+//    }
+
+  assert_different_registers(base, cnt, value, rscratch1, rscratch2);
+
+  Label fini, skip, entry, loop;
+  const int unroll = 8; // Number of stp instructions we'll unroll
+
+  cbz(cnt, fini);
+  tbz(base, 3, skip);
+  str(value, Address(post(base, 8)));
+  sub(cnt, cnt, 1);
+  bind(skip);
+
+  andr(rscratch1, cnt, (unroll-1) * 2);
+  sub(cnt, cnt, rscratch1);
+  add(base, base, rscratch1, Assembler::LSL, 3);
+  adr(rscratch2, entry);
+  sub(rscratch2, rscratch2, rscratch1, Assembler::LSL, 1);
+  br(rscratch2);
+
+  bind(loop);
+  add(base, base, unroll * 16);
+  for (int i = -unroll; i < 0; i++)
+    stp(value, value, Address(base, i * 16));
+  bind(entry);
+  subs(cnt, cnt, unroll * 2);
+  br(Assembler::GE, loop);
+
+  tbz(cnt, 0, fini);
+  str(value, Address(post(base, 8)));
+  bind(fini);
+}
+
+// Use DC ZVA to do fast zeroing.
+// base:   Address of a buffer to be zeroed, 8 bytes aligned.
+// cnt:    Count in HeapWords.
+// is_large: True when 'cnt' is known to be >= BlockZeroingLowLimit.
+void MacroAssembler::block_zero(Register base, Register cnt, bool is_large)
+{
+  Label small;
+  Label store_pair, loop_store_pair, done;
+  Label base_aligned;
+
+  assert_different_registers(base, cnt, rscratch1);
+  guarantee(base == r10 && cnt == r11, "fix register usage");
+
+  Register tmp = rscratch1;
+  Register tmp2 = rscratch2;
+  int zva_length = VM_Version::zva_length();
+
+  // Ensure ZVA length can be divided by 16. This is required by
+  // the subsequent operations.
+  assert (zva_length % 16 == 0, "Unexpected ZVA Length");
+
+  if (!is_large) cbz(cnt, done);
+  tbz(base, 3, base_aligned);
+  str(zr, Address(post(base, 8)));
+  sub(cnt, cnt, 1);
+  bind(base_aligned);
+
+  // Ensure count >= zva_length * 2 so that it still deserves a zva after
+  // alignment.
+  if (!is_large || !(BlockZeroingLowLimit >= zva_length * 2)) {
+    int low_limit = MAX2(zva_length * 2, (int)BlockZeroingLowLimit);
+    cmp(cnt, low_limit >> 3);
+    br(Assembler::LT, small);
+  }
+
+  far_call(StubRoutines::aarch64::get_zero_longs());
+
+  bind(small);
+
+  const int unroll = 8; // Number of stp instructions we'll unroll
+  Label small_loop, small_table_end;
+
+  andr(tmp, cnt, (unroll-1) * 2);
+  sub(cnt, cnt, tmp);
+  add(base, base, tmp, Assembler::LSL, 3);
+  adr(tmp2, small_table_end);
+  sub(tmp2, tmp2, tmp, Assembler::LSL, 1);
+  br(tmp2);
+
+  bind(small_loop);
+  add(base, base, unroll * 16);
+  for (int i = -unroll; i < 0; i++)
+    stp(zr, zr, Address(base, i * 16));
+  bind(small_table_end);
+  subs(cnt, cnt, unroll * 2);
+  br(Assembler::GE, small_loop);
+
+  tbz(cnt, 0, done);
+  str(zr, Address(post(base, 8)));
+
+  bind(done);
+}
 
 void MacroAssembler::string_equals(Register str1, Register str2,
                                    Register cnt, Register result,

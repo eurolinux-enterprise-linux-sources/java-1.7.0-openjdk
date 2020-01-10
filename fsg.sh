@@ -123,12 +123,18 @@ echo "Syncing EC list with NSS"
 if [ "x$PR2124" = "x" ] ; then
 # get pr2124.patch (from http://icedtea.classpath.org//hg/icedtea7)
 # Do not push it or publish it (see http://icedtea.classpath.org/bugzilla/show_bug.cgi?id=2124)
-    wget -O ${TMPDIR}/pr2124.patch http://icedtea.classpath.org/hg/icedtea7/raw-file/tip/patches/pr2124.patch
-    patch -Np0 < ${TMPDIR}/pr2124.patch
-    rm -vf ${TMPDIR}/pr2124.patch
-else
-    echo "Applying ${PR2124}"
-    patch -Np0 < $PR2124
-fi;
+    TMPPR2124=${TMPDIR}/pr2124.patch
+    PR2124=${TMPPR2124}
+    wget -O ${PR2124} http://icedtea.classpath.org/hg/icedtea7/raw-file/tip/patches/pr2124.patch
+fi
+echo "Applying ${PR2124}"
+if ! patch -Np0 < ${PR2124} ; then
+    echo "Patching failed.";
+    exit 1;
+fi
 echo "Cleaning up after patch application..."
 find . -name '*.orig' | xargs rm -vf
+if [ "x$TMPPR2124" != "x" ] ; then
+    rm -vf ${TMPPR2124}
+fi
+
